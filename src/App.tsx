@@ -153,7 +153,7 @@ function App(): JSX.Element {
               name="interests"
               value={formData.interests}
               onChange={handleInputChange}
-              placeholder="Tell us about your interests and what content you'd like to see..."
+              placeholder="What are you into? What topics would you want to follow? What content you'd like to see..."
               className="h-32"
             />
             <Button
