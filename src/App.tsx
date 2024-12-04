@@ -400,7 +400,7 @@ function App(): JSX.Element {
           disabled={
             currentStep === 4 ||
             (currentStep === 1 && formData.suggestedContent.length === 0) ||
-            (currentStep === 2 && stylePreviews.length === 0) ||
+            (currentStep === 2 && !formData.selectedStyleId) ||
             (currentStep === 3 && !formData.frequency)
           }
         >
