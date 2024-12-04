@@ -234,7 +234,8 @@ function App(): JSX.Element {
             </div>
 
             {stylePreviews.length > 0 && (
-              <Card>
+              <Card className="p-4">
+                Okay, here's what I've got for you. Anything you like?
                 <CardHeader>
                   <CardTitle>Preview Styles</CardTitle>
                 </CardHeader>
@@ -335,6 +336,17 @@ function App(): JSX.Element {
   };
 
   const nextStep = () => {
+    // Validate current step before allowing progression
+    if (currentStep === 1 && formData.suggestedContent.length === 0) {
+      return; // Don't proceed if no content has been generated
+    }
+    if (currentStep === 2 && !formData.selectedStyleId) {
+      return; // Don't proceed if no style has been selected
+    }
+    if (currentStep === 3 && !formData.frequency) {
+      return; // Don't proceed if no frequency selected
+    }
+
     setCurrentStep((prev) => Math.min(prev + 1, 4));
     setPreviewGenerated(false);
   };
@@ -383,7 +395,15 @@ function App(): JSX.Element {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Previous
         </Button>
-        <Button onClick={nextStep} disabled={currentStep === 4}>
+        <Button
+          onClick={nextStep}
+          disabled={
+            currentStep === 4 ||
+            (currentStep === 1 && formData.suggestedContent.length === 0) ||
+            (currentStep === 2 && stylePreviews.length === 0) ||
+            (currentStep === 3 && !formData.frequency)
+          }
+        >
           Next
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
