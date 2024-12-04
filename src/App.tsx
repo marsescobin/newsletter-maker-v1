@@ -31,6 +31,7 @@ function App(): JSX.Element {
     selectedStyleId: null,
   });
   const [loading, setLoading] = useState(false);
+  const [previewGenerated, setPreviewGenerated] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [stylePreviews, setStylePreviews] = useState([]);
 
@@ -60,16 +61,40 @@ function App(): JSX.Element {
     setLoading(true);
     // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 1500));
-    setFormData((prev) => ({
-      ...prev,
-      suggestedContent: [
-        "The Ultimate Guide to Urban Gardening",
-        "10 Must-Read Books for Tech Enthusiasts",
-        "Latest Developments in Renewable Energy",
-        "How AI is Transforming Healthcare",
-        "The Future of Remote Work",
-      ],
-    }));
+    const newSuggestedContent = [
+      {
+        title: "The Ultimate Guide to Urban Gardening",
+        preview:
+          "Transform any space into a thriving garden! From tiny balconies to windowsills, learn how to grow fresh herbs & veggies in urban spaces. Perfect for beginners wanting to join the urban farming revolution.",
+        link: "/urban-gardening-guide",
+        emoji: "🌱",
+      },
+      {
+        title: "10 Must-Read Books for Tech Enthusiasts",
+        preview:
+          "Curated for both beginners & veterans: from AI ethics to quantum computing. These game-changing books will reshape how you think about technology's future. Features recommendations from top tech leaders.",
+        link: "/tech-books-2024",
+        emoji: "📚",
+      },
+      {
+        title: "Latest Developments in Renewable Energy",
+        preview:
+          "Breakthrough innovations making clean energy more accessible & affordable. Discover how new solar tech, wind power advances & energy storage solutions are accelerating our sustainable future.",
+        link: "/renewable-energy-updates",
+        emoji: "⚡",
+      },
+    ];
+
+    setFormData((prev) => {
+      const updated = {
+        ...prev,
+        suggestedContent: newSuggestedContent,
+      };
+      console.log("Updated formData:", updated); // Debug log
+      return updated;
+    });
+
+    setPreviewGenerated(true);
     setLoading(false);
   };
 
@@ -115,6 +140,7 @@ function App(): JSX.Element {
                  - "Weekend Project: Create Your Own Mini Herb Garden"`,
       },
     ]);
+    setPreviewGenerated(true);
     setLoading(false);
   };
 
@@ -135,16 +161,44 @@ function App(): JSX.Element {
               disabled={loading}
               className="w-full"
             >
-              Generate Content Suggestions
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {previewGenerated ? "Sending Feedback..." : "Generating..."}
+                </>
+              ) : previewGenerated ? (
+                "Send Feedback"
+              ) : (
+                "Generate Content Suggestions"
+              )}
             </Button>
             {formData.suggestedContent.length > 0 && (
-              <div className="mt-4 space-y-2">
-                <h3 className="font-medium">Suggested Content:</h3>
-                <ul className="list-disc pl-5">
+              <div className="mt-4 space-y-4">
+                <p>
+                  Here are some content suggestions based on your interests. Do
+                  they resonate with you?
+                </p>
+                <div className="space-y-4">
                   {formData.suggestedContent.map((content, index) => (
-                    <li key={index}>{content}</li>
+                    <div
+                      key={index}
+                      className="p-4 border rounded-lg hover:border-blue-500 transition-colors"
+                    >
+                      <h3 className="font-medium text-lg mb-2">
+                        {content.emoji} {content.title}
+                      </h3>
+                      <p className="text-gray-600 mb-2">{content.preview}</p>
+                      <a
+                        href={content.link}
+                        className="text-blue-500 hover:text-blue-700 text-sm"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        🔗 Read more
+                      </a>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
             )}
           </div>
@@ -169,8 +223,10 @@ function App(): JSX.Element {
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating Previews...
+                    {previewGenerated ? "Sending Feedback..." : "Generating..."}
                   </>
+                ) : previewGenerated ? (
+                  "Send Feedback"
                 ) : (
                   "Generate Style Previews"
                 )}
@@ -267,7 +323,7 @@ function App(): JSX.Element {
               Send Test Newsletter
             </Button>
             {feedback && (
-              <Alert>
+              <Alert variant="success">
                 <AlertDescription>{feedback}</AlertDescription>
               </Alert>
             )}
@@ -278,8 +334,16 @@ function App(): JSX.Element {
     }
   };
 
-  const nextStep = () => setCurrentStep((prev) => Math.min(prev + 1, 4));
-  const prevStep = () => setCurrentStep((prev) => Math.max(prev - 1, 1));
+  const nextStep = () => {
+    setCurrentStep((prev) => Math.min(prev + 1, 4));
+    setPreviewGenerated(false);
+  };
+
+  const prevStep = () => {
+    setCurrentStep((prev) => Math.max(prev - 1, 1));
+    setPreviewGenerated(false);
+  };
+
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
