@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { api } from "./api/newsletter";
 import {
   Card,
   CardContent,
@@ -59,43 +60,18 @@ function App(): JSX.Element {
 
   const generateSuggestions = async () => {
     setLoading(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    const newSuggestedContent = [
-      {
-        title: "The Ultimate Guide to Urban Gardening",
-        preview:
-          "Transform any space into a thriving garden! From tiny balconies to windowsills, learn how to grow fresh herbs & veggies in urban spaces. Perfect for beginners wanting to join the urban farming revolution.",
-        link: "/urban-gardening-guide",
-        emoji: "🌱",
-      },
-      {
-        title: "10 Must-Read Books for Tech Enthusiasts",
-        preview:
-          "Curated for both beginners & veterans: from AI ethics to quantum computing. These game-changing books will reshape how you think about technology's future. Features recommendations from top tech leaders.",
-        link: "/tech-books-2024",
-        emoji: "📚",
-      },
-      {
-        title: "Latest Developments in Renewable Energy",
-        preview:
-          "Breakthrough innovations making clean energy more accessible & affordable. Discover how new solar tech, wind power advances & energy storage solutions are accelerating our sustainable future.",
-        link: "/renewable-energy-updates",
-        emoji: "⚡",
-      },
-    ];
-
-    setFormData((prev) => {
-      const updated = {
+    try {
+      const suggestions = await api.generateSuggestions(formData.interests);
+      setFormData((prev) => ({
         ...prev,
-        suggestedContent: newSuggestedContent,
-      };
-      console.log("Updated formData:", updated); // Debug log
-      return updated;
-    });
-
-    setPreviewGenerated(true);
-    setLoading(false);
+        suggestedContent: suggestions,
+      }));
+    } catch (error) {
+      console.error("Error generating suggestions:", error);
+    } finally {
+      setPreviewGenerated(true);
+      setLoading(false);
+    }
   };
 
   const sendTestNewsletter = async () => {
