@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { api } from "./api/newsletter";
+import React, { useState, useEffect } from "react";
+import { api, ChatMessage } from "./api/newsletter";
 import {
   Card,
   CardContent,
@@ -36,6 +36,7 @@ function App(): JSX.Element {
   const [previewGenerated, setPreviewGenerated] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [stylePreviews, setStylePreviews] = useState([]);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
 
   const frequencies = [
     { value: "daily", label: "Daily" },
@@ -43,6 +44,10 @@ function App(): JSX.Element {
     { value: "biweekly", label: "Bi-weekly" },
     { value: "monthly", label: "Monthly" },
   ];
+
+  useEffect(() => {
+    console.log("Chat history updated:", chatHistory);
+  }, [chatHistory]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -62,7 +67,28 @@ function App(): JSX.Element {
   const generateSuggestions = async () => {
     setLoading(true);
     try {
-      const response = await api.generateSuggestions(formData.interests);
+      const userMessage: ChatMessage = {
+        role: "user",
+        content: formData.interests,
+        timestamp: Date.now(),
+      };
+
+      const response = await api.generateSuggestions({
+        action: "generateContent",
+        content: [...chatHistory, userMessage]
+          .map((msg) => `${msg.role}: ${msg.content}`)
+          .join("\n"),
+      });
+
+      const assistantMessage: ChatMessage = {
+        role: "assistant",
+        content: response.understanding,
+        timestamp: Date.now(),
+      };
+
+      setChatHistory((prev) => [...prev, userMessage, assistantMessage]);
+      console.log("Chat history:", chatHistory);
+
       setFormData((prev) => ({
         ...prev,
         understanding: response.understanding,

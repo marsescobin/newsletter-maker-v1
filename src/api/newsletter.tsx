@@ -31,11 +31,23 @@ interface ContentResponse {
   suggestions: ContentSuggestion[];
 }
 
-export const api = {
-  async generateSuggestions(interests: string): Promise<ContentResponse> {
-    try {
-      console.log("Sending request to worker with interests:", interests);
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: number;
+}
 
+interface GenerateSuggestionsRequest {
+  action: string;
+  content: string;
+}
+
+export const api = {
+  async generateSuggestions({
+    action,
+    content,
+  }: GenerateSuggestionsRequest): Promise<ContentResponse> {
+    try {
       const response = await fetch(`${WORKER_URL}`, {
         method: "POST",
         headers: {
@@ -43,8 +55,8 @@ export const api = {
           Accept: "application/json",
         },
         body: JSON.stringify({
-          action: "generateContent",
-          content: interests,
+          action,
+          content,
         }),
       });
 
@@ -76,20 +88,16 @@ export const api = {
     }
   },
 
-  async generateStylePreviews(
-    content: any[],
-    style: string
-  ): Promise<StylePreview[]> {
+  async generateStylePreviews({
+    chatHistory,
+  }: GenerateSuggestionsRequest): Promise<StylePreview[]> {
     try {
       const response = await fetch(`${WORKER_URL}/generate-style`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "generateStyle",
-          content: {
-            articles: content,
-            style: style,
-          },
+          chatHistory,
         }),
       });
 
@@ -99,7 +107,6 @@ export const api = {
 
       const data = await response.json();
 
-      // Transform the response into our StylePreview format
       return data.styles.map((style, index) => ({
         id: index + 1,
         style: style.name,
