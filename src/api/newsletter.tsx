@@ -1,4 +1,4 @@
-const WORKER_URL = "http://localhost:8787/chat";
+const WORKER_URL = "https://newsletter-workers.marsescobin.workers.dev";
 
 // Types for API responses and requests
 interface ContentSuggestion {
