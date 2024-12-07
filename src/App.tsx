@@ -30,6 +30,7 @@ function App(): JSX.Element {
     writingStyle: "",
     frequency: "",
     selectedStyleId: null,
+    understanding: "",
   });
   const [loading, setLoading] = useState(false);
   const [previewGenerated, setPreviewGenerated] = useState(false);
@@ -61,10 +62,11 @@ function App(): JSX.Element {
   const generateSuggestions = async () => {
     setLoading(true);
     try {
-      const suggestions = await api.generateSuggestions(formData.interests);
+      const response = await api.generateSuggestions(formData.interests);
       setFormData((prev) => ({
         ...prev,
-        suggestedContent: suggestions,
+        understanding: response.understanding,
+        suggestedContent: response.suggestions,
       }));
     } catch (error) {
       console.error("Error generating suggestions:", error);
@@ -150,10 +152,8 @@ function App(): JSX.Element {
             </Button>
             {formData.suggestedContent.length > 0 && (
               <div className="mt-4 space-y-4">
-                <p>
-                  Here are some content suggestions based on your interests. Do
-                  they resonate with you?
-                </p>
+                <p className="text-gray-700">{formData.understanding}</p>
+
                 <div className="space-y-4">
                   {formData.suggestedContent.map((content, index) => (
                     <div

@@ -1,17 +1,22 @@
-const WORKER_URL = "https://newsletter-workers.marsescobin.workers.dev";
+const WORKER_URL = "http://localhost:8787/chat";
 
 // Types for API responses and requests
 interface ContentSuggestion {
   title: string;
-  preview: string;
+  description: string;
   link: string;
   emoji: string;
 }
 
-interface StylePreview {
-  id: number;
-  style: string;
-  preview: string;
+// For the content suggestion agent
+interface ContentAgentResponse {
+  understanding_and_strategy: string;
+  recommendations: ContentSuggestion[];
+}
+
+// For the newsletter preview agent
+interface NewsletterAgentResponse {
+  preview: string; // or whatever structure the newsletter preview will have
 }
 
 interface ApiResponse<T> {
@@ -20,8 +25,14 @@ interface ApiResponse<T> {
   message?: string;
 }
 
+// Add new interface for the complete response
+interface ContentResponse {
+  understanding: string;
+  suggestions: ContentSuggestion[];
+}
+
 export const api = {
-  async generateSuggestions(interests: string): Promise<ContentSuggestion[]> {
+  async generateSuggestions(interests: string): Promise<ContentResponse> {
     try {
       console.log("Sending request to worker with interests:", interests);
 
@@ -45,17 +56,18 @@ export const api = {
         );
       }
 
-      // Get the array of items directly from the response
-      const items = await response.json();
-      console.log("Received items from worker:", items);
+      const data = await response.json();
+      console.log("Received items from worker:", data);
 
-      // Transform each item into our frontend format
-      return items.map((item) => ({
-        title: item.Title,
-        preview: item.Description,
-        link: item.Link,
-        emoji: item.Emoji,
-      }));
+      return {
+        understanding: data.understanding_and_strategy,
+        suggestions: data.recommendations.map((item) => ({
+          title: item.title,
+          preview: item.description,
+          link: item.link,
+          emoji: item.emoji,
+        })),
+      };
     } catch (error) {
       console.error("Detailed error:", error);
       throw new Error(
