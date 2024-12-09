@@ -8,23 +8,6 @@ interface ContentSuggestion {
   emoji: string;
 }
 
-// For the content suggestion agent
-interface ContentAgentResponse {
-  understanding_and_strategy: string;
-  recommendations: ContentSuggestion[];
-}
-
-// For the newsletter preview agent
-interface NewsletterAgentResponse {
-  preview: string; // or whatever structure the newsletter preview will have
-}
-
-interface ApiResponse<T> {
-  data?: T;
-  error?: string;
-  message?: string;
-}
-
 // Add new interface for the complete response
 interface ContentResponse {
   understanding: string;
@@ -42,11 +25,23 @@ interface GenerateSuggestionsRequest {
   content: string;
 }
 
+// Add new interfaces for newsletter preview
+interface NewsletterPreviewRequest {
+  selectedContent: ContentSuggestion[];
+  chatHistory?: ChatMessage[]; // Optional for first request
+  writingStyle?: string; // Optional custom style preferences
+}
+
+interface NewsletterPreview {
+  subject: string;
+  body: string;
+}
+
 export const api = {
   async generateSuggestions({
     action,
     content,
-  }: GenerateSuggestionsRequest): Promise<ContentResponse> {
+  }: GenerateSuggestionsRequest): Promise<ContentResponse | NewsletterPreview> {
     try {
       const response = await fetch(`${WORKER_URL}`, {
         method: "POST",
@@ -61,30 +56,31 @@ export const api = {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Error response:", errorText);
-        throw new Error(
-          `HTTP error! status: ${response.status}, message: ${errorText}`
-        );
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log("Received items from worker:", data);
 
-      return {
-        understanding: data.understanding_and_strategy,
-        suggestions: data.recommendations.map((item) => ({
-          title: item.title,
-          preview: item.description,
-          link: item.link,
-          emoji: item.emoji,
-        })),
-      };
+      // Return based on action type
+      if (action === "generateContent") {
+        return {
+          understanding: data.understanding_and_strategy,
+          suggestions: data.recommendations.map((item) => ({
+            title: item.title,
+            description: item.description,
+            link: item.link,
+            emoji: item.emoji,
+          })),
+        };
+      } else {
+        return {
+          subject: data.subject,
+          body: data.body,
+        };
+      }
     } catch (error) {
-      console.error("Detailed error:", error);
-      throw new Error(
-        `Failed to generate content suggestions: ${error.message}`
-      );
+      console.error("Error:", error);
+      throw error;
     }
   },
 
@@ -144,6 +140,37 @@ export const api = {
     } catch (error) {
       console.error("Error sending test newsletter:", error);
       throw new Error("Failed to send test newsletter");
+    }
+  },
+
+  async generateNewsletterPreview({
+    selectedContent,
+    chatHistory,
+    writingStyle,
+  }: NewsletterPreviewRequest): Promise<NewsletterPreview> {
+    try {
+      const response = await fetch(`${WORKER_URL}/preview`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          action: "addWritingVoice",
+          selectedContent,
+          chatHistory,
+          writingStyle,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error generating newsletter preview:", error);
+      throw new Error("Failed to generate newsletter preview");
     }
   },
 };

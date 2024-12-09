@@ -18,9 +18,10 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, ArrowRight, Send } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
+import { ThumbsUp, ThumbsDown } from "lucide-react";
+import { presetContents } from "./data/presetContent";
 
 function App(): JSX.Element {
   const [currentStep, setCurrentStep] = useState(1);
@@ -49,6 +50,20 @@ function App(): JSX.Element {
     console.log("Chat history updated:", chatHistory);
   }, [chatHistory]);
 
+  useEffect(() => {
+    // Show 5 random preset contents on initial load
+    const randomContents = [...presetContents]
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 3);
+
+    setFormData((prev) => ({
+      ...prev,
+      suggestedContent: randomContents,
+      understanding:
+        "Here are some interesting topics you might enjoy. Feel free to enter your interests to get personalized suggestions!",
+    }));
+  }, []); // Empty dependency array means this runs once on component mount
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -73,21 +88,18 @@ function App(): JSX.Element {
         timestamp: Date.now(),
       };
 
-      const response = await api.generateSuggestions({
+      const response = (await api.generateSuggestions({
         action: "generateContent",
-        content: [...chatHistory, userMessage]
-          .map((msg) => `${msg.role}: ${msg.content}`)
-          .join("\n"),
-      });
+        content: formData.interests,
+      })) as ContentResponse;
 
       const assistantMessage: ChatMessage = {
         role: "assistant",
-        content: response.understanding,
+        content: JSON.stringify(response),
         timestamp: Date.now(),
       };
 
       setChatHistory((prev) => [...prev, userMessage, assistantMessage]);
-      console.log("Chat history:", chatHistory);
 
       setFormData((prev) => ({
         ...prev,
@@ -95,10 +107,10 @@ function App(): JSX.Element {
         suggestedContent: response.suggestions,
       }));
     } catch (error) {
-      console.error("Error generating suggestions:", error);
+      console.error("Error:", error);
     } finally {
-      setPreviewGenerated(true);
       setLoading(false);
+      setPreviewGenerated(true);
     }
   };
 
@@ -110,42 +122,14 @@ function App(): JSX.Element {
     setLoading(false);
   };
 
-  const generateStylePreviews = async () => {
+  const generateNewsletterPreview = () => {
+    console.log("Feedback submitted:", formData.writingStyle);
+    // For now, just set loading and preview states
     setLoading(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    setStylePreviews([
-      {
-        id: 1,
-        style: "Witty and Clever",
-        preview: `🎭 Well, well, well... look who's diving into the world of urban gardening!...`,
-      },
-      {
-        id: 2,
-        style: "Professional and Insightful",
-        preview: `📊 Urban Gardening: A Modern Approach to Sustainable Living
-
-                 As urban spaces continue to evolve, the integration of natural elements becomes increasingly vital. This week's carefully curated selection explores innovative approaches to incorporating greenery into your living space.
-
-                 Featured Articles:
-                 - "Strategic Planning for Optimal Indoor Gardens: A Data-Driven Approach"
-                 - "Maximizing Yield in Limited Spaces: Expert Insights and Analysis"`,
-      },
-      {
-        id: 3,
-        style: "Friendly and Casual",
-        preview: `🌿 Hey plant friends!
-
-                 Ready to get your hands dirty? We've got some super fun gardening ideas that'll work even in the tiniest spaces. Trust me, if I can keep plants alive in my tiny apartment, you totally can too!
-
-                 Check these out:
-                 - "Super Easy Plants That Are Pretty Much Unkillable" (yes, really!)
-                 - "Weekend Project: Create Your Own Mini Herb Garden"`,
-      },
-    ]);
-    setPreviewGenerated(true);
-    setLoading(false);
+    setTimeout(() => {
+      setLoading(false);
+      setPreviewGenerated(true);
+    }, 500);
   };
 
   const renderStep = () => {
@@ -184,20 +168,41 @@ function App(): JSX.Element {
                   {formData.suggestedContent.map((content, index) => (
                     <div
                       key={index}
-                      className="p-4 border rounded-lg hover:border-blue-500 transition-colors"
+                      className="p-4 border rounded-lg hover:border-blue-500 transition-colors space-y-3"
                     >
-                      <h3 className="font-medium text-lg mb-2">
-                        {content.emoji} {content.title}
-                      </h3>
-                      <p className="text-gray-600 mb-2">{content.preview}</p>
-                      <a
-                        href={content.link}
-                        className="text-blue-500 hover:text-blue-700 text-sm"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        🔗 Read more
-                      </a>
+                      <div>
+                        <h3 className="font-medium text-lg mb-2">
+                          {content.emoji} {content.title}
+                        </h3>
+                        <p className="text-gray-600 mb-2">{content.preview}</p>
+                        <a
+                          href={content.link}
+                          className="text-blue-500 hover:text-blue-700 text-sm"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          🔗 Read more
+                        </a>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleMoreLikeThis(content)}
+                        >
+                          <ThumbsUp className="h-4 w-4 mr-1" />
+                          More like this
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleLessLikeThis(content)}
+                        >
+                          <ThumbsDown className="h-4 w-4 mr-1" />
+                          Not relevant
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -206,85 +211,113 @@ function App(): JSX.Element {
           </div>
         );
       case 2:
+        console.log("Step 2 newsletter data:", {
+          subject: formData.newsletterSubject,
+          body: formData.newsletterBody,
+        });
         return (
-          <div className="space-y-6">
-            <div>
-              <Label>Describe your preferred writing style:</Label>
-              <Textarea
-                name="writingStyle"
-                value={formData.writingStyle}
-                onChange={handleInputChange}
-                placeholder="Example: 'witty and clever' or 'professional and insightful'"
-                className="h-24"
-              />
-              <Button
-                onClick={generateStylePreviews}
-                disabled={loading || !formData.writingStyle}
-                className="w-full mt-4"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {previewGenerated ? "Sending Feedback..." : "Generating..."}
-                  </>
-                ) : previewGenerated ? (
-                  "Send Feedback"
-                ) : (
-                  "Generate Style Previews"
-                )}
-              </Button>
+          <div className="space-y-4">
+            {/* Show the formatted newsletter first */}
+            <div className="prose max-w-none p-4 border rounded-lg bg-white">
+              {formData.newsletterSubject && (
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-gray-500">
+                    Subject
+                  </h3>
+                  <p className="text-lg font-medium">
+                    {formData.newsletterSubject}
+                  </p>
+                </div>
+              )}
+
+              {formData.newsletterBody && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500">
+                    Preview
+                  </h3>
+                  <div
+                    className="mt-2 text-gray-600"
+                    // Use dangerouslySetInnerHTML only if your AI returns HTML-formatted content
+                    // Otherwise, use white-space: pre-wrap to preserve formatting
+                    style={{ whiteSpace: "pre-wrap" }}
+                  >
+                    {formData.newsletterBody}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {stylePreviews.length > 0 && (
-              <Card className="p-4">
-                Okay, here's what I've got for you. Anything you like?
-                <CardHeader>
-                  <CardTitle>Preview Styles</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <RadioGroup
-                    value={formData.selectedStyleId}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        selectedStyleId: value,
-                      }))
-                    }
-                    className="space-y-6"
-                  >
-                    {stylePreviews.map((preview) => (
-                      <div
-                        key={preview.id}
-                        className={`relative p-4 rounded-lg border ${
-                          formData.selectedStyleId === preview.id.toString()
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-gray-200"
-                        }`}
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem
-                            value={preview.id.toString()}
-                            id={`style-${preview.id}`}
-                          />
-                          <Label
-                            htmlFor={`style-${preview.id}`}
-                            className="font-medium"
-                          >
-                            {preview.style}
-                          </Label>
-                        </div>
-                        <div className="mt-4 pl-6 whitespace-pre-line text-sm text-gray-600">
-                          {preview.preview}
-                        </div>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                </CardContent>
-              </Card>
-            )}
+            {/* Feedback input below the preview */}
+            <Textarea
+              name="writingStyle"
+              value={formData.writingStyle}
+              onChange={handleInputChange}
+              placeholder="How would you like to improve this? (e.g., 'Make it more casual', 'Add more details about...')"
+              className="h-32"
+            />
+
+            <Button
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  const userMessage: ChatMessage = {
+                    role: "user",
+                    content: formData.writingStyle,
+                    timestamp: Date.now(),
+                  };
+
+                  const response = (await api.generateSuggestions({
+                    action: "addWritingVoice",
+                    content: JSON.stringify({
+                      feedback: formData.writingStyle,
+                      chatHistory: chatHistory,
+                    }),
+                  })) as NewsletterPreview;
+
+                  const assistantMessage: ChatMessage = {
+                    role: "assistant",
+                    content: JSON.stringify(response),
+                    timestamp: Date.now(),
+                  };
+
+                  setChatHistory((prev) => [
+                    ...prev,
+                    userMessage,
+                    assistantMessage,
+                  ]);
+
+                  // Update the newsletter preview
+                  setFormData((prev) => ({
+                    ...prev,
+                    writingStyle: "", // Clear the input
+                    newsletterSubject: response.subject, // Update with new version
+                    newsletterBody: response.body, // Update with new version
+                  }));
+                } catch (error) {
+                  console.error("Error:", error);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading || !formData.writingStyle.trim()}
+              className="w-full"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                "Send Feedback"
+              )}
+            </Button>
           </div>
         );
       case 3:
+        console.log("Step 3 newsletter data:", {
+          subject: formData.newsletterSubject,
+          body: formData.newsletterBody,
+        });
         return (
           <Select
             value={formData.frequency}
@@ -303,8 +336,27 @@ function App(): JSX.Element {
           </Select>
         );
       case 4:
+        console.log("Step 4 newsletter data:", {
+          subject: formData.newsletterSubject,
+          body: formData.newsletterBody,
+        });
+        // Add this function outside the JSX
+        const handleEmailClick = () => {
+          console.log("Email button clicked");
+          try {
+            const mailtoLink = `mailto:?subject=${encodeURIComponent(
+              formData.newsletterSubject || ""
+            )}&body=${encodeURIComponent(formData.newsletterBody || "")}`;
+            console.log("Generated mailto link:", mailtoLink);
+            window.location.href = mailtoLink;
+          } catch (error) {
+            console.error("Error generating email:", error);
+          }
+        };
+
         return (
           <div className="space-y-4">
+            {/* Summary section */}
             <div className="space-y-2">
               <h3 className="font-medium">Summary:</h3>
               <p>
@@ -317,14 +369,37 @@ function App(): JSX.Element {
                 <strong>Frequency:</strong> {formData.frequency}
               </p>
             </div>
-            <Button
-              onClick={sendTestNewsletter}
-              disabled={loading}
-              className="w-full"
-            >
+
+            {/* Newsletter Preview */}
+            <div className="prose max-w-none p-4 border rounded-lg bg-white">
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold text-gray-500">Subject</h3>
+                <p className="text-lg font-medium">
+                  {formData.newsletterSubject}
+                </p>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-500">Preview</h3>
+                <div
+                  className="mt-2 text-gray-600"
+                  style={{ whiteSpace: "pre-wrap" }}
+                >
+                  {formData.newsletterBody}
+                </div>
+              </div>
+            </div>
+
+            {/* Email button */}
+            <Button onClick={handleEmailClick} className="w-full" type="button">
               <Send className="mr-2 h-4 w-4" />
-              Send Test Newsletter
+              Send Test Email
             </Button>
+
+            {/* Log the current values */}
+            <div className="hidden">
+              {console.log("Current formData:", formData)}
+            </div>
+
             {feedback && (
               <Alert variant="success">
                 <AlertDescription>{feedback}</AlertDescription>
@@ -337,18 +412,33 @@ function App(): JSX.Element {
     }
   };
 
-  const nextStep = () => {
-    // Validate current step before allowing progression
-    if (currentStep === 1 && formData.suggestedContent.length === 0) {
-      return; // Don't proceed if no content has been generated
-    }
-    if (currentStep === 2 && !formData.selectedStyleId) {
-      return; // Don't proceed if no style has been selected
-    }
-    if (currentStep === 3 && !formData.frequency) {
-      return; // Don't proceed if no frequency selected
+  const nextStep = async () => {
+    // If moving from step 1 to step 2
+    if (currentStep === 1 && formData.suggestedContent.length > 0) {
+      setLoading(true);
+      try {
+        const response = (await api.generateSuggestions({
+          action: "addWritingVoice",
+          content: JSON.stringify({
+            suggestions: formData.suggestedContent,
+            understanding: formData.understanding,
+          }),
+        })) as NewsletterPreview;
+
+        // Save the formatted newsletter
+        setFormData((prev) => ({
+          ...prev,
+          newsletterSubject: response.subject,
+          newsletterBody: response.body,
+        }));
+      } catch (error) {
+        console.error("Error formatting newsletter:", error);
+      } finally {
+        setLoading(false);
+      }
     }
 
+    // Proceed to next step
     setCurrentStep((prev) => Math.min(prev + 1, 4));
     setPreviewGenerated(false);
   };
@@ -401,8 +491,7 @@ function App(): JSX.Element {
           onClick={nextStep}
           disabled={
             currentStep === 4 ||
-            (currentStep === 1 && formData.suggestedContent.length === 0) ||
-            (currentStep === 2 && !formData.selectedStyleId) ||
+            // (currentStep === 1 && formData.suggestedContent.length === 0) ||
             (currentStep === 3 && !formData.frequency)
           }
         >
