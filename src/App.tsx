@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, ArrowRight, Send } from "lucide-react";
+import { ArrowLeft, ArrowRight, Send, Plus, Heart } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
@@ -38,6 +38,10 @@ function App(): JSX.Element {
   const [feedback, setFeedback] = useState("");
   const [stylePreviews, setStylePreviews] = useState([]);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [loadingItemId, setLoadingItemId] = useState<number | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [likedItems, setLikedItems] = useState<number[]>([]);
+  const [animatingHearts, setAnimatingHearts] = useState<number[]>([]);
 
   const frequencies = [
     { value: "daily", label: "Daily" },
@@ -122,14 +126,76 @@ function App(): JSX.Element {
     setLoading(false);
   };
 
-  const generateNewsletterPreview = () => {
-    console.log("Feedback submitted:", formData.writingStyle);
-    // For now, just set loading and preview states
-    setLoading(true);
+  const handleLessLikeThis = (content: any, index: number) => {
+    // Remove the item from suggestedContent array
+    setFormData((prev) => ({
+      ...prev,
+      suggestedContent: prev.suggestedContent.filter((_, i) => i !== index),
+    }));
+
+    // Optionally, you can also add this to chat history
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: `Not interested in: ${content.title}`,
+      timestamp: Date.now(),
+    };
+
+    setChatHistory((prev) => [...prev, userMessage]);
+  };
+
+  const handleSuggestMore = async () => {
+    setIsLoadingMore(true);
+
+    try {
+      // Create a message describing what content we currently like
+      const contentSummary = formData.suggestedContent
+        .map((content) => content.title)
+        .join(", ");
+
+      const response = (await api.generateSuggestions({
+        action: "generateContent",
+        content: JSON.stringify({
+          content: `Generate more content similar to these topics: ${contentSummary}`,
+          chatHistory: chatHistory,
+        }),
+      })) as ContentResponse;
+
+      // Concatenate new suggestions with existing ones
+      setFormData((prev) => ({
+        ...prev,
+        suggestedContent: [...prev.suggestedContent, ...response.suggestions],
+      }));
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  const handleLoveThis = (content: any, index: number) => {
+    // Toggle like state
+    setLikedItems((prev) => {
+      const isCurrentlyLiked = prev.includes(index);
+      return isCurrentlyLiked
+        ? prev.filter((i) => i !== index)
+        : [...prev, index];
+    });
+
+    // Trigger animation
+    setAnimatingHearts((prev) => [...prev, index]);
     setTimeout(() => {
-      setLoading(false);
-      setPreviewGenerated(true);
-    }, 500);
+      setAnimatingHearts((prev) => prev.filter((i) => i !== index));
+    }, 300);
+
+    // Only add to chat history if it's a new like
+    if (!likedItems.includes(index)) {
+      const userMessage: ChatMessage = {
+        role: "user",
+        content: `Loved this content: ${content.title}`,
+        timestamp: Date.now(),
+      };
+      setChatHistory((prev) => [...prev, userMessage]);
+    }
   };
 
   const renderStep = () => {
@@ -146,7 +212,7 @@ function App(): JSX.Element {
             />
             <Button
               onClick={generateSuggestions}
-              disabled={loading}
+              disabled={loading || !formData.interests.trim()} // Add this condition
               className="w-full"
             >
               {loading ? (
@@ -157,64 +223,117 @@ function App(): JSX.Element {
               ) : previewGenerated ? (
                 "Send Feedback"
               ) : (
-                "Generate Content Suggestions"
+                "Send Feedback"
               )}
             </Button>
             {formData.suggestedContent.length > 0 && (
               <div className="mt-4 space-y-4">
-                <p className="text-gray-700">{formData.understanding}</p>
-
                 <div className="space-y-4">
                   {formData.suggestedContent.map((content, index) => (
                     <div
                       key={index}
                       className="p-4 border rounded-lg hover:border-blue-500 transition-colors space-y-3"
                     >
-                      <div>
-                        <h3 className="font-medium text-lg mb-2">
-                          {content.emoji} {content.title}
-                        </h3>
-                        <p className="text-gray-600 mb-2">{content.preview}</p>
-                        <a
-                          href={content.link}
-                          className="text-blue-500 hover:text-blue-700 text-sm"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          🔗 Read more
-                        </a>
-                      </div>
+                      {loadingItemId === index ? (
+                        <div className="flex flex-col items-center justify-center h-[200px] space-y-2">
+                          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                          <p className="text-sm text-gray-500">
+                            Finding similar content...
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <a
+                              href={content.link}
+                              className="block mb-2"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <h3 className="font-medium text-lg hover:text-blue-500">
+                                {content.emoji} {content.title}
+                              </h3>
+                              <p className="text-gray-600">{content.preview}</p>
+                            </a>
+                          </div>
 
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleMoreLikeThis(content)}
-                        >
-                          <ThumbsUp className="h-4 w-4 mr-1" />
-                          More like this
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleLessLikeThis(content)}
-                        >
-                          <ThumbsDown className="h-4 w-4 mr-1" />
-                          Not relevant
-                        </Button>
-                      </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleLoveThis(content, index)}
+                              className={`
+                                group
+                                ${
+                                  likedItems.includes(index)
+                                    ? "border-red-200 bg-red-50"
+                                    : ""
+                                }
+                              `}
+                            >
+                              <Heart
+                                className={`
+                                  h-4 w-4 mr-1 transition-all duration-300
+                                  ${
+                                    likedItems.includes(index)
+                                      ? "fill-red-500 stroke-red-500"
+                                      : "stroke-gray-600"
+                                  }
+                                  ${
+                                    animatingHearts.includes(index)
+                                      ? "animate-pulse"
+                                      : ""
+                                  }
+                                  group-hover:${
+                                    likedItems.includes(index)
+                                      ? "fill-red-600 stroke-red-600"
+                                      : "stroke-red-500"
+                                  }
+                                `}
+                              />
+                              {likedItems.includes(index)
+                                ? "Loved"
+                                : "Love this"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleLessLikeThis(content, index)}
+                            >
+                              <ThumbsDown className="h-4 w-4 mr-1" />
+                              Not relevant
+                            </Button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ))}
+                </div>
+                <div className="mt-4">
+                  <Button
+                    className="w-full bg-black text-white"
+                    variant="outline"
+                    onClick={handleSuggestMore}
+                    disabled={isLoadingMore}
+                  >
+                    {isLoadingMore ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Finding more suggestions...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Suggest more like this
+                      </>
+                    )}
+                  </Button>
                 </div>
               </div>
             )}
           </div>
         );
       case 2:
-        console.log("Step 2 newsletter data:", {
-          subject: formData.newsletterSubject,
-          body: formData.newsletterBody,
-        });
         return (
           <div className="space-y-4">
             {/* Show the formatted newsletter first */}

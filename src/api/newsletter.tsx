@@ -37,11 +37,18 @@ interface NewsletterPreview {
   body: string;
 }
 
+// Add this interface for the moreLikeThis response
+interface MoreLikeThisResponse {
+  recommendation: ContentSuggestion;
+}
+
 export const api = {
   async generateSuggestions({
     action,
     content,
-  }: GenerateSuggestionsRequest): Promise<ContentResponse | NewsletterPreview> {
+  }: GenerateSuggestionsRequest): Promise<
+    ContentResponse | NewsletterPreview | MoreLikeThisResponse
+  > {
     try {
       const response = await fetch(`${WORKER_URL}`, {
         method: "POST",
@@ -71,6 +78,15 @@ export const api = {
             link: item.link,
             emoji: item.emoji,
           })),
+        };
+      } else if (action === "moreLikeThis") {
+        return {
+          recommendation: {
+            title: data.recommendation.title,
+            description: data.recommendation.description,
+            link: data.recommendation.link,
+            emoji: data.recommendation.emoji,
+          },
         };
       } else {
         return {
