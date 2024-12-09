@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import DOMPurify from "dompurify";
 import { api, ChatMessage } from "./api/newsletter";
 import {
   Card,
@@ -455,13 +456,11 @@ function App(): JSX.Element {
                     Preview
                   </h3>
                   <div
-                    className="mt-2 text-gray-600"
-                    // Use dangerouslySetInnerHTML only if your AI returns HTML-formatted content
-                    // Otherwise, use white-space: pre-wrap to preserve formatting
-                    style={{ whiteSpace: "pre-wrap" }}
-                  >
-                    {formData.newsletterBody}
-                  </div>
+                    className="mt-2 text-gray-600 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-4 [&_p]:mb-4"
+                    dangerouslySetInnerHTML={{
+                      __html: DOMPurify.sanitize(formData.newsletterBody),
+                    }}
+                  />
                 </div>
               )}
             </div>
@@ -537,11 +536,11 @@ function App(): JSX.Element {
               <div>
                 <h3 className="text-sm font-semibold text-gray-500">Preview</h3>
                 <div
-                  className="mt-2 text-gray-600"
-                  style={{ whiteSpace: "pre-wrap" }}
-                >
-                  {formData.newsletterBody}
-                </div>
+                  className="mt-2 text-gray-600 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-4 [&_p]:mb-4"
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(formData.newsletterBody),
+                  }}
+                />
               </div>
             </div>
 
