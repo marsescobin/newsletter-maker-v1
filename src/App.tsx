@@ -311,7 +311,7 @@ function App(): JSX.Element {
                 </div>
                 <div className="mt-4">
                   <Button
-                    className="w-full bg-black text-white"
+                    className="w-full "
                     variant="outline"
                     onClick={handleSuggestMore}
                     disabled={isLoadingMore}
