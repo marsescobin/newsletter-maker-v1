@@ -18,9 +18,8 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, ArrowRight, Send, Plus, Heart } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
-import { ThumbsUp, ThumbsDown } from "lucide-react";
+import { ThumbsDown } from "lucide-react";
 import { presetContents } from "./data/presetContent";
 
 function App(): JSX.Element {
@@ -32,11 +31,12 @@ function App(): JSX.Element {
     frequency: "",
     selectedStyleId: null,
     understanding: "",
+    newsletterSubject: "",
+    newsletterBody: "",
   });
   const [loading, setLoading] = useState(false);
   const [previewGenerated, setPreviewGenerated] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [stylePreviews, setStylePreviews] = useState([]);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [loadingItemId, setLoadingItemId] = useState<number | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -67,6 +67,40 @@ function App(): JSX.Element {
         "Here are some interesting topics you might enjoy. Feel free to enter your interests to get personalized suggestions!",
     }));
   }, []); // Empty dependency array means this runs once on component mount
+
+  useEffect(() => {
+    // Generate newsletter when entering step 2
+    const generateNewsletter = async () => {
+      setLoading(true);
+      try {
+        const response = (await api.generateSuggestions({
+          action: "addWritingVoice",
+          content: JSON.stringify({
+            suggestions: formData.suggestedContent,
+            understanding: formData.understanding,
+          }),
+        })) as NewsletterPreview;
+
+        setFormData((prev) => ({
+          ...prev,
+          newsletterSubject: response.subject,
+          newsletterBody: response.body,
+        }));
+      } catch (error) {
+        console.error("Error formatting newsletter:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (
+      currentStep === 2 &&
+      !formData.newsletterSubject &&
+      !formData.newsletterBody
+    ) {
+      generateNewsletter();
+    }
+  }, [currentStep, formData.suggestedContent, formData.understanding]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -203,13 +237,15 @@ function App(): JSX.Element {
       case 1:
         return (
           <div className="space-y-4">
-            <Textarea
-              name="interests"
-              value={formData.interests}
-              onChange={handleInputChange}
-              placeholder="What are you into? What content would you like to see..."
-              className="h-32"
-            />
+            {!loading && (
+              <Textarea
+                name="interests"
+                value={formData.interests}
+                onChange={handleInputChange}
+                placeholder="What are you into? What content would you like to see..."
+                className="h-32"
+              />
+            )}
             <Button
               onClick={generateSuggestions}
               disabled={loading || !formData.interests.trim()} // Add this condition
@@ -223,7 +259,7 @@ function App(): JSX.Element {
               ) : previewGenerated ? (
                 "Send Feedback"
               ) : (
-                "Send Feedback"
+                "Generate Content"
               )}
             </Button>
             {formData.suggestedContent.length > 0 && (
@@ -337,44 +373,14 @@ function App(): JSX.Element {
         return (
           <div className="space-y-4">
             {/* Show the formatted newsletter first */}
-            <div className="prose max-w-none p-4 border rounded-lg bg-white">
-              {formData.newsletterSubject && (
-                <div className="mb-4">
-                  <h3 className="text-sm font-semibold text-gray-500">
-                    Subject
-                  </h3>
-                  <p className="text-lg font-medium">
-                    {formData.newsletterSubject}
-                  </p>
-                </div>
-              )}
-
-              {formData.newsletterBody && (
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-500">
-                    Preview
-                  </h3>
-                  <div
-                    className="mt-2 text-gray-600"
-                    // Use dangerouslySetInnerHTML only if your AI returns HTML-formatted content
-                    // Otherwise, use white-space: pre-wrap to preserve formatting
-                    style={{ whiteSpace: "pre-wrap" }}
-                  >
-                    {formData.newsletterBody}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Feedback input below the preview */}
             <Textarea
               name="writingStyle"
               value={formData.writingStyle}
               onChange={handleInputChange}
               placeholder="How would you like to improve this? (e.g., 'Make it more casual', 'Add more details about...')"
               className="h-32"
+              disabled={loading}
             />
-
             <Button
               onClick={async () => {
                 setLoading(true);
@@ -424,12 +430,43 @@ function App(): JSX.Element {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating...
+                  Generating Newsletter...
                 </>
               ) : (
                 "Send Feedback"
               )}
             </Button>
+
+            <div className="prose max-w-none p-4 border rounded-lg bg-white">
+              {formData.newsletterSubject && (
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-gray-500">
+                    Subject
+                  </h3>
+                  <p className="text-lg font-medium">
+                    {formData.newsletterSubject}
+                  </p>
+                </div>
+              )}
+
+              {formData.newsletterBody && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500">
+                    Preview
+                  </h3>
+                  <div
+                    className="mt-2 text-gray-600"
+                    // Use dangerouslySetInnerHTML only if your AI returns HTML-formatted content
+                    // Otherwise, use white-space: pre-wrap to preserve formatting
+                    style={{ whiteSpace: "pre-wrap" }}
+                  >
+                    {formData.newsletterBody}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Feedback input below the preview */}
           </div>
         );
       case 3:
@@ -531,33 +568,8 @@ function App(): JSX.Element {
     }
   };
 
-  const nextStep = async () => {
-    // If moving from step 1 to step 2
-    if (currentStep === 1 && formData.suggestedContent.length > 0) {
-      setLoading(true);
-      try {
-        const response = (await api.generateSuggestions({
-          action: "addWritingVoice",
-          content: JSON.stringify({
-            suggestions: formData.suggestedContent,
-            understanding: formData.understanding,
-          }),
-        })) as NewsletterPreview;
-
-        // Save the formatted newsletter
-        setFormData((prev) => ({
-          ...prev,
-          newsletterSubject: response.subject,
-          newsletterBody: response.body,
-        }));
-      } catch (error) {
-        console.error("Error formatting newsletter:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    // Proceed to next step
+  const nextStep = () => {
+    // Simplified nextStep - just increment the step
     setCurrentStep((prev) => Math.min(prev + 1, 4));
     setPreviewGenerated(false);
   };
