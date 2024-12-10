@@ -8,28 +8,26 @@ interface ContentSuggestion {
   emoji: string;
 }
 
-// Add new interface for the complete response
-interface ContentResponse {
+interface AssistantContent {
   understanding: string;
-  suggestions: ContentSuggestion[];
+  suggestions?: ContentSuggestion[];
 }
 
-export interface ChatMessage {
+interface ChatMessage {
   role: "user" | "assistant";
-  content: string;
-  timestamp: number;
+  content: string | AssistantContent;
+  timestamp?: number;
 }
 
 interface GenerateSuggestionsRequest {
   action: string;
-  content: string;
+  chatHistory: ChatMessage[];
 }
 
-// Add new interfaces for newsletter preview
-interface NewsletterPreviewRequest {
-  selectedContent: ContentSuggestion[];
-  chatHistory?: ChatMessage[]; // Optional for first request
-  writingStyle?: string; // Optional custom style preferences
+// Response types
+interface ContentResponse {
+  understanding_and_strategy: string;
+  recommendations: ContentSuggestion[];
 }
 
 interface NewsletterPreview {
@@ -37,65 +35,61 @@ interface NewsletterPreview {
   body: string;
 }
 
-// Add this interface for the moreLikeThis response
-interface MoreLikeThisResponse {
-  recommendation: ContentSuggestion;
-}
-
 export const api = {
   async generateSuggestions({
     action,
-    content,
-  }: GenerateSuggestionsRequest): Promise<
-    ContentResponse | NewsletterPreview | MoreLikeThisResponse
-  > {
+    chatHistory,
+  }: GenerateSuggestionsRequest): Promise<ContentResponse | NewsletterPreview> {
     try {
+      // Ensure we're sending the correct structure
+      const payload = {
+        action,
+        chatHistory: chatHistory.map((msg) => ({
+          role: msg.role,
+          content:
+            typeof msg.content === "string"
+              ? msg.content
+              : JSON.stringify(msg.content),
+        })),
+      };
+
       const response = await fetch(`${WORKER_URL}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({
-          action,
-          content,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.error || (await response.text());
+        console.error("Server error:", {
+          status: response.status,
+          message: errorMessage,
+          details: errorData,
+        });
+        throw new Error(`Server error: ${errorMessage || response.status}`);
       }
 
       const data = await response.json();
 
-      // Return based on action type
-      if (action === "generateContent") {
-        return {
-          understanding: data.understanding_and_strategy,
-          suggestions: data.recommendations.map((item) => ({
-            title: item.title,
-            description: item.description,
-            link: item.link,
-            emoji: item.emoji,
-          })),
-        };
-      } else if (action === "moreLikeThis") {
-        return {
-          recommendation: {
-            title: data.recommendation.title,
-            description: data.recommendation.description,
-            link: data.recommendation.link,
-            emoji: data.recommendation.emoji,
-          },
-        };
-      } else {
-        return {
-          subject: data.subject,
-          body: data.body,
-        };
+      // Type guard to ensure response matches expected format
+      if (!isValidResponse(data)) {
+        throw new Error("Invalid response format from server");
       }
+
+      return data;
     } catch (error) {
-      console.error("Error:", error);
+      // Enhance error context before rethrowing
+      if (error instanceof Error) {
+        console.error("API Error:", {
+          message: error.message,
+          cause: error.cause,
+          stack: error.stack,
+        });
+      }
       throw error;
     }
   },
@@ -190,3 +184,15 @@ export const api = {
     }
   },
 };
+
+// Add type guard (if not already present)
+function isValidResponse(
+  data: any
+): data is ContentResponse | NewsletterPreview {
+  // Add your validation logic here based on expected response structure
+  return (
+    data &&
+    (("understanding_and_strategy" in data && "recommendations" in data) ||
+      ("subject" in data && "body" in data))
+  );
+}

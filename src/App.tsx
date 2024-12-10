@@ -23,6 +23,24 @@ import { Loader2 } from "lucide-react";
 import { ThumbsDown } from "lucide-react";
 import { presetContents } from "./data/presetContent";
 
+interface ContentSuggestion {
+  title: string;
+  description: string;
+  link: string;
+  emoji: string;
+}
+
+interface AssistantContent {
+  understanding: string;
+  suggestions: ContentSuggestion[];
+}
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string | AssistantContent;
+  timestamp: number;
+}
+
 function App(): JSX.Element {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -44,7 +62,6 @@ function App(): JSX.Element {
   const [likedItems, setLikedItems] = useState<number[]>([]);
   const [animatingHearts, setAnimatingHearts] = useState<number[]>([]);
   const [testEmail, setTestEmail] = useState("");
-  const [showLoveMessage, setShowLoveMessage] = useState<number | null>(null);
 
   const frequencies = [
     { value: "daily", label: "Daily" },
@@ -78,10 +95,15 @@ function App(): JSX.Element {
       try {
         const response = (await api.generateSuggestions({
           action: "addWritingVoice",
-          content: JSON.stringify({
-            suggestions: formData.suggestedContent,
-            understanding: formData.understanding,
-          }),
+          chatHistory: [
+            {
+              role: "user",
+              content: JSON.stringify({
+                suggestions: formData.suggestedContent,
+                understanding: formData.understanding,
+              }),
+            },
+          ],
         })) as NewsletterPreview;
 
         setFormData((prev) => ({
@@ -129,23 +151,40 @@ function App(): JSX.Element {
         timestamp: Date.now(),
       };
 
-      const response = (await api.generateSuggestions({
+      const updatedHistory = [...chatHistory, userMessage];
+      console.log(
+        "Sending chat history:",
+        JSON.stringify(updatedHistory, null, 2)
+      );
+      console.log("User interests:", formData.interests);
+      setChatHistory(updatedHistory);
+
+      const response = await api.generateSuggestions({
         action: "generateContent",
-        content: formData.interests,
-      })) as ContentResponse;
+        chatHistory: updatedHistory.map((msg) => ({
+          role: msg.role,
+          content:
+            msg.role === "assistant"
+              ? (msg.content as AssistantContent).understanding
+              : msg.content,
+        })),
+      });
 
       const assistantMessage: ChatMessage = {
         role: "assistant",
-        content: JSON.stringify(response),
+        content: {
+          understanding: response.understanding_and_strategy,
+          suggestions: response.recommendations,
+        },
         timestamp: Date.now(),
       };
 
-      setChatHistory((prev) => [...prev, userMessage, assistantMessage]);
+      setChatHistory((prev) => [...prev, assistantMessage]);
 
       setFormData((prev) => ({
         ...prev,
-        understanding: response.understanding,
-        suggestedContent: response.suggestions,
+        understanding: response.understanding_and_strategy,
+        suggestedContent: response.recommendations,
       }));
     } catch (error) {
       console.error("Error:", error);
@@ -163,44 +202,64 @@ function App(): JSX.Element {
     setLoading(false);
   };
 
-  const handleLessLikeThis = (content: any, index: number) => {
-    // Remove the item from suggestedContent array
-    setFormData((prev) => ({
-      ...prev,
-      suggestedContent: prev.suggestedContent.filter((_, i) => i !== index),
-    }));
-
-    // Optionally, you can also add this to chat history
+  const handleLessLikeThis = (content: ContentSuggestion, index: number) => {
     const userMessage: ChatMessage = {
       role: "user",
       content: `Not interested in: ${content.title}`,
       timestamp: Date.now(),
     };
-
     setChatHistory((prev) => [...prev, userMessage]);
+    // Remove the item from suggestedContent array
+    setFormData((prev) => ({
+      ...prev,
+      suggestedContent: prev.suggestedContent.filter((_, i) => i !== index),
+    }));
   };
 
   const handleSuggestMore = async () => {
     setIsLoadingMore(true);
-
     try {
-      // Create a message describing what content we currently like
       const contentSummary = formData.suggestedContent
         .map((content) => content.title)
         .join(", ");
 
-      const response = (await api.generateSuggestions({
-        action: "generateContent",
-        content: JSON.stringify({
-          content: `Generate more content similar to these topics: ${contentSummary}`,
-          chatHistory: chatHistory,
-        }),
-      })) as ContentResponse;
+      const userMessage: ChatMessage = {
+        role: "user",
+        content: `Please suggest more content similar to: ${contentSummary}`,
+        timestamp: Date.now(),
+      };
 
-      // Concatenate new suggestions with existing ones
+      const updatedHistory = [...chatHistory, userMessage];
+      setChatHistory(updatedHistory);
+
+      const response = await api.generateSuggestions({
+        action: "generateContent",
+        chatHistory: updatedHistory.map((msg) => ({
+          role: msg.role,
+          content:
+            msg.role === "assistant"
+              ? (msg.content as AssistantContent).understanding
+              : msg.content,
+        })),
+      });
+
+      const assistantMessage: ChatMessage = {
+        role: "assistant",
+        content: {
+          understanding: response.understanding_and_strategy,
+          suggestions: response.recommendations,
+        },
+        timestamp: Date.now(),
+      };
+
+      setChatHistory((prev) => [...prev, assistantMessage]);
+
       setFormData((prev) => ({
         ...prev,
-        suggestedContent: [...prev.suggestedContent, ...response.suggestions],
+        suggestedContent: [
+          ...prev.suggestedContent,
+          ...response.recommendations,
+        ],
       }));
     } catch (error) {
       console.error("Error:", error);
@@ -209,7 +268,13 @@ function App(): JSX.Element {
     }
   };
 
-  const handleLoveThis = (content: any, index: number) => {
+  const handleLoveThis = (content: ContentSuggestion, index: number) => {
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: `Loved this content: ${content.title}`,
+      timestamp: Date.now(),
+    };
+    setChatHistory((prev) => [...prev, userMessage]);
     // Toggle like state
     setLikedItems((prev) => {
       const isCurrentlyLiked = prev.includes(index);
@@ -233,11 +298,6 @@ function App(): JSX.Element {
       };
       setChatHistory((prev) => [...prev, userMessage]);
     }
-
-    // Show message
-    setShowLoveMessage(index);
-    // Clean up after 2 seconds
-    setTimeout(() => setShowLoveMessage(null), 2000);
   };
 
   const renderStep = () => {
@@ -401,10 +461,7 @@ function App(): JSX.Element {
 
                   const response = (await api.generateSuggestions({
                     action: "addWritingVoice",
-                    content: JSON.stringify({
-                      feedback: formData.writingStyle,
-                      chatHistory: chatHistory,
-                    }),
+                    chatHistory: [...chatHistory, userMessage],
                   })) as NewsletterPreview;
 
                   const assistantMessage: ChatMessage = {
