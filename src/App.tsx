@@ -43,6 +43,8 @@ function App(): JSX.Element {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [likedItems, setLikedItems] = useState<number[]>([]);
   const [animatingHearts, setAnimatingHearts] = useState<number[]>([]);
+  const [testEmail, setTestEmail] = useState("");
+  const [showLoveMessage, setShowLoveMessage] = useState<number | null>(null);
 
   const frequencies = [
     { value: "daily", label: "Daily" },
@@ -231,6 +233,11 @@ function App(): JSX.Element {
       };
       setChatHistory((prev) => [...prev, userMessage]);
     }
+
+    // Show message
+    setShowLoveMessage(index);
+    // Clean up after 2 seconds
+    setTimeout(() => setShowLoveMessage(null), 2000);
   };
 
   const renderStep = () => {
@@ -496,16 +503,22 @@ function App(): JSX.Element {
           body: formData.newsletterBody,
         });
         // Add this function outside the JSX
-        const handleEmailClick = () => {
-          console.log("Email button clicked");
+        const handleEmailClick = async () => {
+          if (!testEmail) return;
+
+          setLoading(true);
           try {
-            const mailtoLink = `mailto:?subject=${encodeURIComponent(
-              formData.newsletterSubject || ""
-            )}&body=${encodeURIComponent(formData.newsletterBody || "")}`;
-            console.log("Generated mailto link:", mailtoLink);
-            window.location.href = mailtoLink;
+            await api.sendTestEmail({
+              to: testEmail,
+              subject: formData.newsletterSubject,
+              body: formData.newsletterBody,
+            });
+            setFeedback("Test email sent successfully! Check your inbox.");
           } catch (error) {
-            console.error("Error generating email:", error);
+            console.error("Error sending email:", error);
+            setFeedback("Error sending email. Please try again.");
+          } finally {
+            setLoading(false);
           }
         };
 
@@ -544,11 +557,33 @@ function App(): JSX.Element {
               </div>
             </div>
 
-            {/* Email button */}
-            <Button onClick={handleEmailClick} className="w-full" type="button">
-              <Send className="mr-2 h-4 w-4" />
-              Send Test Email
-            </Button>
+            {/* Add email input */}
+            <div className="flex gap-2">
+              <input
+                type="email"
+                placeholder="Enter test email"
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+                className="flex-1 px-3 py-2 border rounded-md"
+              />
+              <Button
+                onClick={handleEmailClick}
+                disabled={!testEmail || loading}
+                className="whitespace-nowrap"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    Send Test
+                  </>
+                )}
+              </Button>
+            </div>
 
             {/* Log the current values */}
             <div className="hidden">
@@ -556,7 +591,9 @@ function App(): JSX.Element {
             </div>
 
             {feedback && (
-              <Alert variant="success">
+              <Alert
+                variant={feedback.includes("error") ? "destructive" : "success"}
+              >
                 <AlertDescription>{feedback}</AlertDescription>
               </Alert>
             )}
