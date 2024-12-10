@@ -70,6 +70,26 @@ function App(): JSX.Element {
     { value: "monthly", label: "Monthly" },
   ];
 
+  type AssistantMessageContent =
+    | {
+        understanding?: string;
+        suggestions?: ContentSuggestion[];
+      }
+    | {
+        subject?: string;
+        body?: string;
+      };
+
+  const createAssistantMessage = (
+    content: AssistantMessageContent
+  ): ChatMessage => {
+    return {
+      role: "assistant",
+      content: content,
+      timestamp: Date.now(),
+    };
+  };
+
   useEffect(() => {
     console.log("Chat history updated:", chatHistory);
   }, [chatHistory]);
@@ -79,12 +99,22 @@ function App(): JSX.Element {
     const randomContents = [...presetContents]
       .sort(() => Math.random() - 0.5)
       .slice(0, 3);
+    const presetMessage = createAssistantMessage({
+      understanding:
+        "Here are some interesting topics you might enjoy. Feel free to enter your interests to get personalized suggestions!",
+      suggestions: randomContents.map((content) => ({
+        title: content.title,
+        description: content.preview,
+        link: content.link,
+        emoji: content.emoji,
+      })),
+    });
+
+    setChatHistory((prev) => [presetMessage]);
 
     setFormData((prev) => ({
       ...prev,
       suggestedContent: randomContents,
-      understanding:
-        "Here are some interesting topics you might enjoy. Feel free to enter your interests to get personalized suggestions!",
     }));
   }, []); // Empty dependency array means this runs once on component mount
 
@@ -459,9 +489,20 @@ function App(): JSX.Element {
                     timestamp: Date.now(),
                   };
 
+                  console.log("suggestion", formData.suggestedContent);
+                  console.log("understanding", formData.understanding);
+
                   const response = (await api.generateSuggestions({
                     action: "addWritingVoice",
-                    chatHistory: [...chatHistory, userMessage],
+                    chatHistory: [
+                      {
+                        role: "user",
+                        content: JSON.stringify({
+                          suggestions: formData.suggestedContent,
+                          understanding: formData.understanding,
+                        }),
+                      },
+                    ],
                   })) as NewsletterPreview;
 
                   const assistantMessage: ChatMessage = {
@@ -501,7 +542,6 @@ function App(): JSX.Element {
                 "Send Feedback"
               )}
             </Button>
-
             <div className="prose max-w-none p-4 border rounded-lg bg-white">
               {formData.newsletterSubject && (
                 <div className="mb-4">
@@ -528,7 +568,6 @@ function App(): JSX.Element {
                 </div>
               )}
             </div>
-
             {/* Feedback input below the preview */}
           </div>
         );
