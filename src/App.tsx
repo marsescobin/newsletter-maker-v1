@@ -114,7 +114,12 @@ function App(): JSX.Element {
 
     setFormData((prev) => ({
       ...prev,
-      suggestedContent: randomContents,
+      suggestedContent: randomContents.map((content) => ({
+        title: content.title,
+        description: content.preview,
+        link: content.link,
+        emoji: content.emoji,
+      })),
     }));
   }, []); // Empty dependency array means this runs once on component mount
 
@@ -354,8 +359,6 @@ function App(): JSX.Element {
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   {previewGenerated ? "Sending Feedback..." : "Generating..."}
                 </>
-              ) : previewGenerated ? (
-                "Send Feedback"
               ) : (
                 "Generate Content"
               )}
@@ -387,7 +390,9 @@ function App(): JSX.Element {
                               <h3 className="font-medium text-lg hover:text-blue-500">
                                 {content.emoji} {content.title}
                               </h3>
-                              <p className="text-gray-600">{content.preview}</p>
+                              <p className="text-gray-600">
+                                {content.description}
+                              </p>
                             </a>
                           </div>
 
@@ -753,8 +758,8 @@ function App(): JSX.Element {
         <Button
           onClick={nextStep}
           disabled={
+            loading ||
             currentStep === 4 ||
-            // (currentStep === 1 && formData.suggestedContent.length === 0) ||
             (currentStep === 3 && !formData.frequency)
           }
         >
