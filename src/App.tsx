@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import DOMPurify from "dompurify";
 import { api, ChatMessage } from "./api/newsletter";
 import {
@@ -17,11 +17,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, ArrowRight, Send, Plus, Heart } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Send,
+  Plus,
+  Heart,
+  FileUp,
+  Check,
+} from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
 import { ThumbsDown } from "lucide-react";
 import { presetContents } from "./data/presetContent";
+import { resumeApi } from "./api/resumeparser";
 
 interface ContentSuggestion {
   title: string;
@@ -62,6 +71,8 @@ function App(): JSX.Element {
   const [likedItems, setLikedItems] = useState<number[]>([]);
   const [animatingHearts, setAnimatingHearts] = useState<number[]>([]);
   const [testEmail, setTestEmail] = useState("");
+  const [resumeUploaded, setResumeUploaded] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const frequencies = [
     { value: "daily", label: "Daily" },
@@ -335,23 +346,80 @@ function App(): JSX.Element {
     }
   };
 
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("resume", file);
+      console.log("File being uploaded:", file.name, file.type); // Debug log
+
+      const response = await resumeApi.parseResume(formData);
+
+      // Update the interests field with the parsed content
+      setFormData((prev) => ({
+        ...prev,
+        interests: `Create a recommmendation based on this resume:\n${response.text}`,
+      }));
+
+      setResumeUploaded(true);
+    } catch (error) {
+      console.error("Error parsing resume:", error);
+      alert("Error parsing resume. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const renderStep = () => {
     switch (currentStep) {
       case 1:
         return (
           <div className="space-y-4">
-            {!loading && (
-              <Textarea
-                name="interests"
-                value={formData.interests}
-                onChange={handleInputChange}
-                placeholder="What are you into? What content would you like to see..."
-                className="h-32"
-              />
-            )}
+            {/* Upload Button and Status */}
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading}
+                className="w-full"
+              >
+                <FileUp className="mr-2 h-4 w-4" />
+                Upload Resume
+              </Button>
+
+              {resumeUploaded && (
+                <div className="flex items-center space-x-2 text-sm text-green-600">
+                  <Check className="h-4 w-4" />
+                  <span>Resume uploaded!</span>
+                </div>
+              )}
+            </div>
+
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept=".txt,.doc,.docx,.pdf"
+              onChange={handleResumeUpload}
+            />
+
+            {/* Interests Textarea */}
+            <Textarea
+              name="interests"
+              value={formData.interests}
+              onChange={handleInputChange}
+              placeholder="What are you into? What content would you like to see..."
+              className="h-32"
+              disabled={loading}
+            />
+
             <Button
               onClick={generateSuggestions}
-              disabled={loading || !formData.interests.trim()} // Add this condition
+              disabled={loading || !formData.interests.trim()}
               className="w-full"
             >
               {loading ? (
@@ -363,6 +431,8 @@ function App(): JSX.Element {
                 "Generate Content"
               )}
             </Button>
+
+            {/* Content Suggestions Section */}
             {formData.suggestedContent.length > 0 && (
               <div className="mt-4 space-y-4">
                 <div className="space-y-4">
