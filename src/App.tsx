@@ -134,36 +134,37 @@ function App(): JSX.Element {
     }));
   }, []); // Empty dependency array means this runs once on component mount
 
+  // Define generateNewsletter outside useEffect
+  const generateNewsletter = async () => {
+    setLoading(true);
+    try {
+      const response = (await api.generateSuggestions({
+        action: "addWritingVoice",
+        chatHistory: [
+          {
+            role: "user",
+            content: JSON.stringify({
+              suggestions: formData.suggestedContent,
+              understanding: formData.understanding,
+            }),
+          },
+        ],
+      })) as NewsletterPreview;
+
+      setFormData((prev) => ({
+        ...prev,
+        newsletterSubject: response.subject,
+        newsletterBody: response.body,
+      }));
+    } catch (error) {
+      console.error("Error formatting newsletter:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Simplified useEffect that just calls the function
   useEffect(() => {
-    // Generate newsletter when entering step 2
-    const generateNewsletter = async () => {
-      setLoading(true);
-      try {
-        const response = (await api.generateSuggestions({
-          action: "addWritingVoice",
-          chatHistory: [
-            {
-              role: "user",
-              content: JSON.stringify({
-                suggestions: formData.suggestedContent,
-                understanding: formData.understanding,
-              }),
-            },
-          ],
-        })) as NewsletterPreview;
-
-        setFormData((prev) => ({
-          ...prev,
-          newsletterSubject: response.subject,
-          newsletterBody: response.body,
-        }));
-      } catch (error) {
-        console.error("Error formatting newsletter:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     if (
       currentStep === 2 &&
       !formData.newsletterSubject &&
