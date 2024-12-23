@@ -1,4 +1,5 @@
 const WORKER_URL = "https://newsletter-workers.marsescobin.workers.dev";
+const NEWSIES_URL = "https://newsies.marsescobin.workers.dev";
 
 // Types for API responses and requests
 interface ContentSuggestion {
@@ -36,30 +37,18 @@ interface NewsletterPreview {
 }
 
 export const api = {
-  async generateSuggestions({
-    action,
-    chatHistory,
-  }: GenerateSuggestionsRequest): Promise<ContentResponse | NewsletterPreview> {
+  async generateSuggestions(request: {
+    userPrompt: string;
+  }): Promise<ContentResponse | NewsletterPreview> {
     try {
-      // Ensure we're sending the correct structure
-      const payload = {
-        action,
-        chatHistory: chatHistory.map((msg) => ({
-          role: msg.role,
-          content:
-            typeof msg.content === "string"
-              ? msg.content
-              : JSON.stringify(msg.content),
-        })),
-      };
-
-      const response = await fetch(`${WORKER_URL}`, {
+      console.log("Received userPrompt:", request.userPrompt);
+      const response = await fetch(`${NEWSIES_URL}/createQuery`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ userPrompt: request.userPrompt }),
       });
 
       if (!response.ok) {
@@ -74,11 +63,7 @@ export const api = {
       }
 
       const data = await response.json();
-
-      // Type guard to ensure response matches expected format
-      if (!isValidResponse(data)) {
-        throw new Error("Invalid response format from server");
-      }
+      console.log("Received data:", data);
 
       return data;
     } catch (error) {
@@ -91,6 +76,102 @@ export const api = {
         });
       }
       throw error;
+    }
+  },
+
+  async massageContent(
+    query: string,
+    content: ContentSuggestion[]
+  ): Promise<ContentSuggestion[]> {
+    try {
+      console.log("Original content being sent for massage:", content);
+
+      const response = await fetch(`${NEWSIES_URL}/massageContent`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          searchQuery: query,
+          content: content,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Raw massaged response:", data);
+
+      const massagedData = JSON.parse(data.massagedContent);
+      console.log("Parsed massaged data:", massagedData);
+
+      // Map through original content and only update description and emoji
+      const updatedContent = content.map((item) => {
+        // Find corresponding massaged article by matching title
+        const massagedArticle = massagedData.articles.find(
+          (article) => article.title === item.title
+        );
+
+        console.log("Matching for title:", item.title);
+        console.log("Found massaged article:", massagedArticle);
+
+        if (massagedArticle) {
+          return {
+            ...item, // Keep all original properties
+            description: massagedArticle.description, // Only update description
+            emoji: massagedArticle.emoji, // Only update emoji
+          };
+        }
+        return item; // If no match found, return original item unchanged
+      });
+
+      console.log("Final updated content:", updatedContent);
+      return updatedContent;
+    } catch (error) {
+      console.error("Error massaging content:", error);
+      throw new Error("Failed to massage content");
+    }
+  },
+
+  async scrapeAndSearch(
+    query: string
+  ): Promise<ContentResponse | NewsletterPreview> {
+    try {
+      const response = await fetch(`${NEWSIES_URL}/searchAndScrape`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          searchQuery: query,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Scraped data", JSON.stringify(data, null, 2));
+      // Return in the correct ContentResponse format
+      return {
+        understanding_and_strategy: `Search results for: ${query}`,
+        recommendations: data.results.map((result) => ({
+          title: result.title,
+          description: result.snippet,
+          link: result.link,
+          emoji: "📰", // Adding the required emoji field
+          source: result.source, // These are optional fields
+          date: result.date, // from your original code
+        })),
+      };
+    } catch (error) {
+      console.error("Error scraping and searching:", error);
+      throw new Error("Failed to scrape and search");
     }
   },
 
@@ -154,9 +235,7 @@ export const api = {
   },
 
   async generateNewsletterPreview({
-    selectedContent,
-    chatHistory,
-    writingStyle,
+    content,
   }: NewsletterPreviewRequest): Promise<NewsletterPreview> {
     try {
       const response = await fetch(`${WORKER_URL}/preview`, {
@@ -165,12 +244,7 @@ export const api = {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({
-          action: "addWritingVoice",
-          selectedContent,
-          chatHistory,
-          writingStyle,
-        }),
+        body: JSON.stringify({ content: content }),
       });
 
       if (!response.ok) {
@@ -182,6 +256,25 @@ export const api = {
       console.error("Error generating newsletter preview:", error);
       throw new Error("Failed to generate newsletter preview");
     }
+  },
+
+  async writeNewsletter(request: {
+    searchQuery: string;
+    content: ContentSuggestion[];
+  }): Promise<any> {
+    const response = await fetch(`${NEWSIES_URL}/writeNewsletter`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to generate newsletter");
+    }
+
+    return response.json();
   },
 };
 

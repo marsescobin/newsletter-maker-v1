@@ -130,31 +130,43 @@ function App(): JSX.Element {
         description: content.preview,
         link: content.link,
         emoji: content.emoji,
+        source: content.source,
+        date: content.date,
       })),
     }));
+  }, []); // Empty dependency array means this runs once on component mount
+
+  // Add this useEffect to load saved content when the app starts
+  useEffect(() => {
+    const savedContent = localStorage.getItem("suggestedContent");
+    const savedUnderstanding = localStorage.getItem("understanding");
+
+    if (savedContent && savedUnderstanding) {
+      setFormData((prev) => ({
+        ...prev,
+        suggestedContent: JSON.parse(savedContent),
+        understanding: savedUnderstanding,
+      }));
+    }
   }, []); // Empty dependency array means this runs once on component mount
 
   // Define generateNewsletter outside useEffect
   const generateNewsletter = async () => {
     setLoading(true);
     try {
-      const response = (await api.generateSuggestions({
-        action: "addWritingVoice",
-        chatHistory: [
-          {
-            role: "user",
-            content: JSON.stringify({
-              suggestions: formData.suggestedContent,
-              understanding: formData.understanding,
-            }),
-          },
-        ],
-      })) as NewsletterPreview;
+      // Call the writeNewsletter endpoint instead
+      const response = await api.writeNewsletter({
+        searchQuery: formData.interests,
+        content: formData.suggestedContent,
+      });
+
+      // The response should now match your backend format
+      const newsletter = JSON.parse(response.newsletter);
 
       setFormData((prev) => ({
         ...prev,
-        newsletterSubject: response.subject,
-        newsletterBody: response.body,
+        newsletterSubject: newsletter.subject,
+        newsletterBody: newsletter.body,
       }));
     } catch (error) {
       console.error("Error formatting newsletter:", error);
@@ -188,51 +200,52 @@ function App(): JSX.Element {
       frequency: value,
     }));
   };
-
   const generateSuggestions = async () => {
     setLoading(true);
     try {
-      const userMessage: ChatMessage = {
-        role: "user",
-        content: formData.interests,
-        timestamp: Date.now(),
-      };
-
-      const updatedHistory = [...chatHistory, userMessage];
-      console.log(
-        "Sending chat history:",
-        JSON.stringify(updatedHistory, null, 2)
-      );
       console.log("User interests:", formData.interests);
-      setChatHistory(updatedHistory);
-
       const response = await api.generateSuggestions({
-        action: "generateContent",
-        chatHistory: updatedHistory.map((msg) => ({
-          role: msg.role,
-          content:
-            msg.role === "assistant"
-              ? (msg.content as AssistantContent).understanding
-              : msg.content,
-        })),
+        userPrompt: formData.interests,
       });
-
-      const assistantMessage: ChatMessage = {
-        role: "assistant",
-        content: {
-          understanding: response.understanding_and_strategy,
-          suggestions: response.recommendations,
-        },
-        timestamp: Date.now(),
-      };
-
-      setChatHistory((prev) => [...prev, assistantMessage]);
 
       setFormData((prev) => ({
         ...prev,
         understanding: response.understanding_and_strategy,
-        suggestedContent: response.recommendations,
       }));
+
+      // Save understanding to localStorage
+      localStorage.setItem(
+        "understanding",
+        response.understanding_and_strategy
+      );
+
+      const scrapedResponse = await api.scrapeAndSearch(formData.interests);
+      console.log(
+        "Scraped content before massage:",
+        scrapedResponse.recommendations
+      );
+
+      // First set the scraped content
+      setFormData((prev) => ({
+        ...prev,
+        suggestedContent: scrapedResponse.recommendations,
+      }));
+
+      // Then massage the content
+      const massagedContent = await api.massageContent(
+        formData.interests,
+        scrapedResponse.recommendations
+      );
+      console.log("Massaged content:", massagedContent);
+
+      // Update with massaged content and save to localStorage
+      setFormData((prev) => ({
+        ...prev,
+        suggestedContent: massagedContent,
+      }));
+
+      // Save to localStorage
+      localStorage.setItem("suggestedContent", JSON.stringify(massagedContent));
     } catch (error) {
       console.error("Error:", error);
     } finally {
@@ -464,6 +477,9 @@ function App(): JSX.Element {
                               <p className="text-gray-600">
                                 {content.description}
                               </p>
+                              <span className="text-xs text-gray-500">
+                                {content.source}
+                              </span>
                             </a>
                           </div>
 
@@ -520,7 +536,7 @@ function App(): JSX.Element {
                   ))}
                 </div>
                 <div className="mt-4">
-                  <Button
+                  {/* <Button
                     className="w-full "
                     variant="outline"
                     onClick={handleSuggestMore}
@@ -537,7 +553,7 @@ function App(): JSX.Element {
                         Suggest more like this
                       </>
                     )}
-                  </Button>
+                  </Button> */}
                 </div>
               </div>
             )}
@@ -564,9 +580,6 @@ function App(): JSX.Element {
                     content: formData.writingStyle,
                     timestamp: Date.now(),
                   };
-
-                  console.log("suggestion", formData.suggestedContent);
-                  console.log("understanding", formData.understanding);
 
                   const response = (await api.generateSuggestions({
                     action: "addWritingVoice",
